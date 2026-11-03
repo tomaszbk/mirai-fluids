@@ -23,8 +23,8 @@ The companion plugin in `plugins/` installs with it and turns on by itself when 
 has the plugin it bridges:
 
 - `water_fluids`: bodies in the water of the `water` plugin press the waves of the wave grid
-  (`waves`) and leave wakes, and the foam of those waves is drawn over the water
-  ([below](#water-waves)).
+  (`waves`) and leave wakes, the surface of the water bends with those waves and their foam is
+  drawn over it ([below](#water-waves)).
 
 ## A fluid
 
@@ -137,9 +137,11 @@ Wakes and waves of a water surface, on the same grid machinery:
   when the cell enters the region.
 - The Surface program `Wave_Surface` (`shaders/wave_surface.slang`) shows the waves without the
   `water` plugin: its normals bend the surface and the foam whitens it and makes it rough.
-- With `water` and the `water_fluids` companion, the foam is drawn over the glass of the water
-  where the view meets its surface before the scene, lit by the sun and the sky. The surface of
-  `water` itself does not take the slope of the waves.
+- With `water` and the `water_fluids` companion, the surface of the water bends with the waves:
+  the companion names its Surface program `Water_Fluids_Surface` (`Water_Surface` plus the slope
+  of the waves, scaled by its parameter `waves`) in the setting `Water_Settings` of `water`, when
+  the project leaves that setting empty. The foam is drawn over the glass of the water where the
+  view meets its surface before the scene, lit by the sun and the sky.
 
 ## Particles that follow the fluid
 

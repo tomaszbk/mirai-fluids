@@ -11,8 +11,11 @@ import water "plugins:water/runtime"
 
 // The water and the waves of fluids: each body in the water presses the
 // waves of the grid fluids.WAVE_GRID by what it has under the surface, which
-// leaves a wake as it moves, and the foam of those waves goes over the glass
-// of the water where the view meets its surface before the scene.
+// leaves a wake as it moves; the surface of the water bends with those waves
+// (SURFACE_PROGRAM), and their foam goes over its glass where the view meets
+// it before the scene.
+
+SURFACE_PROGRAM :: "Water_Fluids_Surface" // shaders/water_fluids_surface.slang
 
 // What a body presses the waves with: where it is, how it moves, the radius
 // of the disc it sinks and the volume it has under the surface.
@@ -28,6 +31,13 @@ water_fluids_displacers :: proc(physics:core.Ref(phys.Physics_State),channels:^v
     for body in found[:count] {
         if body.volume>0 {vfx.channel_emit(channels,fluids.CHANNEL_DISPLACERS,displacer_of(body))}
     }
+}
+
+// The surface of the water takes SURFACE_PROGRAM where the project leaves
+// the program of water.Water_Settings to water.
+@(step="render",loops="game editor",before="water_render")
+water_fluids_surface :: proc(settings:^water.Water_Settings) {
+    if base.text_get(settings.surface_program[:])=="" {base.text_set(settings.surface_program[:],SURFACE_PROGRAM)}
 }
 
 @(storage,host)
