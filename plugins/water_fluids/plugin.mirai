@@ -1,0 +1,7 @@
+{
+  "name": "water_fluids",
+  "version": "0.1.0",
+  "dependencies": ["water", "fluids"],
+  "parts": ["Runtime", "Shaders"],
+  "automatic": true
+}

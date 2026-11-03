@@ -1,0 +1,6 @@
+{
+  "name": "fluids",
+  "version": "0.1.0",
+  "dependencies": ["vfx"],
+  "parts": ["Runtime", "Editor", "Shaders", "Assets"]
+}
