@@ -40,7 +40,7 @@
 //! parameter volume_noise {"default":0.4,"min":0,"max":1}
 //! parameter volume_noise_size {"default":0.75,"min":0.01,"max":64}
 // A fluid on a plane, after the core of FluidNinja Live 2.0 (its author let
-// it be rewritten for Mirai; see docs/LICENCIAS.md): the cells of the grid
+// it be rewritten for Mirai): the cells of the grid
 // fluid, flat along y, hold four layers, velocity in cells a step and the
 // rest without units:
 //
