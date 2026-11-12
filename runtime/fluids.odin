@@ -14,10 +14,10 @@ import vfx "plugins:vfx/runtime"
 // paints into the fluids are the entities with a Fluid_Brush or a
 // Fluid_Spline.
 
-// The channels of the fluids: their programs read them by these names
-// (`//! resource brushes channel`).
-CHANNEL_BRUSHES :: vfx.Particle_Channel_Name(1)
-CHANNEL_DISPLACERS :: vfx.Particle_Channel_Name(2)
+// The channels of births of the fluids: their programs read them by these
+// names (`//! resource brushes channel`).
+CHANNEL_BRUSHES :: "brushes"
+CHANNEL_DISPLACERS :: "displacers"
 
 // The name of the grid of a fluid made in the editor, which Fluid_Ground
 // (shaders/fluid_ground.slang) reads.
@@ -63,17 +63,14 @@ FLUID_SPAN :: 1
 // playing (the editor) they paint every frame, as the preview of the
 // emitters runs.
 @(step="fixed",loops="game editor",stage="end",after="transforms_propagate")
-fluid_brushes :: proc(brushes:core.Read(Fluid_Brush),worlds:core.Read(core.World_Transform),channels:^vfx.Particle_Channels,time:core.Time,frame:core.Frame_Time) {
+fluid_brushes :: proc(brushes:^core.Table(Fluid_Brush,.Read),worlds:^core.Table(core.World_Transform,.Read),births:^core.Births,time:core.Time,frame:core.Frame_Time) {
     dt:=time.dt if time.playing else frame.dt
     if !(dt>0) {return}
-    for row in 0..<core.count(brushes) {
-        e:=core.entity_at(brushes,row)
-        brush:=core.at(brushes,row)
-        world,placed:=core.get(worlds,e)
-        if !placed {continue}
+    placed:=core.join(brushes,worlds)
+    for _,brush,world in core.each_joined(&placed) {
         moved:=(world.transform.position-world.previous.position)/dt
-        vfx.channel_emit(channels,CHANNEL_BRUSHES,vfx.Channel_Birth{
-            position=world.transform.position,velocity=moved*brush.follow+brush.push,
+        core.push(&births.queue,core.Birth{
+            channel=core.birth_channel(CHANNEL_BRUSHES),position=world.transform.position,velocity=moved*brush.follow+brush.push,
             size=max(brush.radius,0),count=1,values={brush.density,0,0,0},
         })
     }
@@ -82,13 +79,11 @@ fluid_brushes :: proc(brushes:core.Read(Fluid_Brush),worlds:core.Read(core.World
 // The splines of the world to the channel of the fluids, as the brushes go:
 // each span of each, in straight pieces along the curve.
 @(step="fixed",loops="game editor",stage="end",after="transforms_propagate")
-fluid_splines :: proc(splines:core.Read(Fluid_Spline),worlds:core.Read(core.World_Transform),channels:^vfx.Particle_Channels) {
-    for row in 0..<core.count(splines) {
-        e:=core.entity_at(splines,row)
-        spline:=core.at(splines,row)
-        world,placed:=core.get(worlds,e)
+fluid_splines :: proc(splines:^core.Table(Fluid_Spline,.Read),worlds:^core.Table(core.World_Transform,.Read),births:^core.Births) {
+    placed:=core.join(splines,worlds)
+    for _,spline,world in core.each_joined(&placed) {
         count:=int(min(spline.count,FLUID_SPLINE_POINTS))
-        if !placed || count<2 {continue}
+        if count<2 {continue}
         points:[FLUID_SPLINE_POINTS][3]f32
         for i in 0..<count {points[i]=mm.transform_point(world.transform,spline.points[i])}
         for span in 0..<count-1 {
@@ -96,8 +91,8 @@ fluid_splines :: proc(splines:core.Read(Fluid_Spline),worlds:core.Read(core.Worl
             from:=p1
             for step in 1..=FLUID_SPLINE_STEPS {
                 to:=mm.catmull_rom(p0,p1,p2,p3,f32(step)/FLUID_SPLINE_STEPS)
-                vfx.channel_emit(channels,CHANNEL_BRUSHES,vfx.Channel_Birth{
-                    position=from,velocity=to-from,size=max(spline.width,0)*0.5,count=1,
+                core.push(&births.queue,core.Birth{
+                    channel=core.birth_channel(CHANNEL_BRUSHES),position=from,velocity=to-from,size=max(spline.width,0)*0.5,count=1,
                     values={spline.density,spline.speed,FLUID_SPAN,0},
                 })
                 from=to
@@ -132,16 +127,14 @@ WATER_DISPLACER_DEFAULT :: Water_Displacer{radius=0.5,volume=0.1}
 // the brushes go: where each is, how fast it went since the tick before, its
 // radius and its submerged volume.
 @(step="fixed",loops="game editor",stage="end",after="transforms_propagate")
-water_displacers :: proc(displacers:core.Read(Water_Displacer),worlds:core.Read(core.World_Transform),channels:^vfx.Particle_Channels,time:core.Time,frame:core.Frame_Time) {
+water_displacers :: proc(displacers:^core.Table(Water_Displacer,.Read),worlds:^core.Table(core.World_Transform,.Read),births:^core.Births,time:core.Time,frame:core.Frame_Time) {
     dt:=time.dt if time.playing else frame.dt
     if !(dt>0) {return}
-    for row in 0..<core.count(displacers) {
-        e:=core.entity_at(displacers,row)
-        displacer:=core.at(displacers,row)
-        world,placed:=core.get(worlds,e)
-        if !placed || !(displacer.volume>0) {continue}
-        vfx.channel_emit(channels,CHANNEL_DISPLACERS,vfx.Channel_Birth{
-            position=world.transform.position,velocity=(world.transform.position-world.previous.position)/dt,
+    placed:=core.join(displacers,worlds)
+    for _,displacer,world in core.each_joined(&placed) {
+        if !(displacer.volume>0) {continue}
+        core.push(&births.queue,core.Birth{
+            channel=core.birth_channel(CHANNEL_DISPLACERS),position=world.transform.position,velocity=(world.transform.position-world.previous.position)/dt,
             size=max(displacer.radius,0),count=1,values={displacer.volume,0,0,0},
         })
     }
@@ -209,20 +202,18 @@ probe_entity :: proc "contextless" (id:[3]f32) -> core.Entity {
 
 // The probes of the world to the channel of the fluids, as the brushes go.
 @(step="fixed",loops="game editor",stage="end",after="transforms_propagate")
-fluid_probes :: proc(probes:core.Read(Fluid_Probe),worlds:core.Read(core.World_Transform),channels:^vfx.Particle_Channels) {
-    for row in 0..<core.count(probes) {
-        e:=core.entity_at(probes,row)
-        world,placed:=core.get(worlds,e)
-        if !placed {continue}
+fluid_probes :: proc(probes:^core.Table(Fluid_Probe,.Read),worlds:^core.Table(core.World_Transform,.Read),births:^core.Births) {
+    placed:=core.join(probes,worlds)
+    for e,_,world in core.each_joined(&placed) {
         id:=probe_id(e)
-        vfx.channel_emit(channels,CHANNEL_BRUSHES,vfx.Channel_Birth{position=world.transform.position,count=1,values={id.x,id.y,FLUID_PROBE,id.z}})
+        core.push(&births.queue,core.Birth{channel=core.birth_channel(CHANNEL_BRUSHES),position=world.transform.position,count=1,values={id.x,id.y,FLUID_PROBE,id.z}})
     }
 }
 
 // What came back of the probes: the samples of the frame, and the channel watched for
 // the next while there are probes. Of a probe in two fluids, the densest.
 @(step="render",loops="game editor",before="particles_sync")
-fluid_samples_read :: proc(probes:core.Read(Fluid_Probe),watch:^vfx.Particle_Data_Watch,read:core.Ref(vfx.Particle_Data_Read),samples:^Fluid_Samples) {
+fluid_samples_read :: proc(probes:^core.Table(Fluid_Probe,.Read),watch:^vfx.Particle_Data_Watch,read:core.Ref(vfx.Particle_Data_Read),samples:^Fluid_Samples) {
     if samples==nil {return}
     if core.count(probes)==0 {
         clear(&samples.samples)

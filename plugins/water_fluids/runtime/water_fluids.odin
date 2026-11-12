@@ -2,7 +2,6 @@ package water_fluids
 
 import "mirai:core"
 import render "mirai:engine/render"
-import "mirai:host"
 import "mirai:std/base"
 import fluids "project:plugins/fluids/runtime"
 import phys "plugins:physics/runtime"
@@ -19,17 +18,17 @@ SURFACE_PROGRAM :: "Water_Fluids_Surface" // shaders/water_fluids_surface.slang
 
 // What a body presses the waves with: where it is, how it moves, the radius
 // of the disc it sinks and the volume it has under the surface.
-displacer_of :: proc "contextless" (body:phys.Fluid_Body) -> vfx.Channel_Birth {
-    return {position={body.center.x,body.surface,body.center.z},velocity=body.velocity,size=clamp(body.reach,0.2,6),count=1,values={body.volume,0,0,0}}
+displacer_of :: proc "contextless" (body:phys.Fluid_Body) -> core.Birth {
+    return {channel=core.birth_channel(fluids.CHANNEL_DISPLACERS),position={body.center.x,body.surface,body.center.z},velocity=body.velocity,size=clamp(body.reach,0.2,6),count=1,values={body.volume,0,0,0}}
 }
 
 @(step="fixed",loops="game editor",stage="simulate",after="physics_step")
-water_fluids_displacers :: proc(physics:core.Ref(phys.Physics_State),channels:^vfx.Particle_Channels,time:core.Time) {
+water_fluids_displacers :: proc(physics:core.Ref(phys.Physics_State),births:^core.Births,time:core.Time) {
     if !time.playing || !(time.dt>0) {return}
     found:[water.WET_CAPACITY]phys.Fluid_Body
     count:=min(phys.fluid_bodies(physics,found[:]),len(found))
     for body in found[:count] {
-        if body.volume>0 {vfx.channel_emit(channels,fluids.CHANNEL_DISPLACERS,displacer_of(body))}
+        if body.volume>0 {core.push(&births.queue,displacer_of(body))}
     }
 }
 
@@ -49,18 +48,18 @@ Water_Fluids_Gpu :: struct {
 // The foam of the waves over the glass of the water, when the world has the
 // texture of the waves.
 @(step="render",loops="game editor",after="water_render",before="render_sync")
-water_fluids_foam :: proc(state:^Water_Fluids_Gpu,gpu:core.Ref(water.Water_Gpu),grids:core.Read(vfx.Particle_Grid),textures:core.Read(vfx.Particle_World_Texture),app:^host.App) {
+water_fluids_foam :: proc(state:^Water_Fluids_Gpu,gpu:core.Ref(water.Water_Gpu),grids:^core.Table(vfx.Particle_Grid,.Read),textures:^core.Table(vfx.Particle_World_Texture,.Read),renderer:^render.Renderer) {
     state.water=nil
-    if app.renderer==nil || gpu.ptr==nil || gpu.count==0 || !has_waves(grids,textures) {return}
-    state.pipeline=render.stage_pipeline(app,{stage=.Blend,shader="water_over",fragment="water_fluids_foam",name="water foam",blend=.Alpha})
+    if renderer==nil || gpu.ptr==nil || gpu.count==0 || !has_waves(grids,textures) {return}
+    state.pipeline=render.stage_pipeline(renderer,{stage=.Blend,shader="water_over",fragment="water_fluids_foam",name="water foam",blend=.Alpha})
     if state.pipeline==0 {return}
     state.water=gpu.ptr
-    render.frame_pass(app,.Blend,foam_record,state)
+    render.frame_pass(renderer,.Blend,foam_record,state)
 }
 
 // Whether the world has the texture of the waves of fluids.
 @(private)
-has_waves :: proc(grids:core.Read(vfx.Particle_Grid),textures:core.Read(vfx.Particle_World_Texture)) -> bool {
+has_waves :: proc(grids:^core.Table(vfx.Particle_Grid,.Read),textures:^core.Table(vfx.Particle_World_Texture,.Read)) -> bool {
     for row in 0..<core.count(textures) {
         grid,ok:=core.get(grids,core.entity_at(textures,row))
         if ok && base.text_equal(grid.name[:],fluids.WAVE_GRID) {return true}

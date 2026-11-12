@@ -35,7 +35,8 @@ An entity with (the Create card **Fluid** makes it whole, with the effect `asset
   parameters (simulation speed, what it keeps each step, width of the pressure kernel, brushes,
   borders, wind);
 - a silent `Particle_Channel` named `brushes` (`CHANNEL_BRUSHES`), through which the program reads
-  the brushes without its effect starting particles.
+  the brushes without its effect starting particles. Brushes, splines and probes reach it as
+  births of `core.Births` on that channel, so a game pushes its own the same way.
 
 The layers of each cell, with velocities in cells per step:
 
@@ -159,9 +160,11 @@ texture. The Surface program `Fluid_Ground` (`shaders/fluid_ground.slang`) tints
 
 ## Editor
 
-Create cards **Fluid** (grid, emitter and channel, with a free grid name), **Fluid volume** (a
-64×24×64 grid with `Particle_Volume`, named `volume`), **Fluid brush**, **Fluid spline** and
-**Fluid probe**, and the API method `fluid.samples`, the probe samples of the shown world.
+Create cards **Fluid** (grid named `fluid`, emitter and channel), **Fluid volume** (a 64×24×64
+grid with `Particle_Volume`, named `volume`), **Fluid brush**, **Fluid spline** and **Fluid
+probe**, each placing its recipe of `recipes/`, and the API method `fluid.samples`, the probe
+samples of the shown world. A second fluid that `Fluid_Drift` or a material reads by name takes a
+grid name of its own.
 
 ## Verify
 
